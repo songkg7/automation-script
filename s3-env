@@ -1,0 +1,89 @@
+#!/bin/bash
+
+# Need this for daisy-chained symlinks.
+while
+    APP_HOME=${app_path%"${app_path##*/}"}  # leaves a trailing /; empty if no leading path
+    [ -h "$app_path" ]
+do
+    ls=$( ls -ld "$app_path" )
+    link=${ls#*' -> '}
+    case $link in             #(
+        /*)   app_path=$link ;; #(
+        *)    app_path=$APP_HOME$link ;;
+    esac
+done
+
+APP_HOME=$( cd "${APP_HOME:-./}" && pwd -P ) || exit
+
+warn () {
+    echo "$*"
+} >&2
+
+die () {
+    echo
+    echo "$*"
+    echo
+    exit 1
+}
+
+# OS specific support (must be 'true' or 'false').
+cygwin=false
+msys=false
+darwin=false
+nonstop=false
+case "$(uname)" in
+    CYGWIN* )
+        cygwin=true
+        ;;
+    Darwin* )
+        darwin=true
+        ;;
+    MSYS* )
+        msys=true
+        ;;
+    NonStop* )
+        nonstop=true
+        ;;
+esac
+
+# TODO: force dependencies to be installed based on OS options
+if (gum confirm "Do you want to install dependencies?"); then
+    echo "Installing dependencies..."
+    brew install awscli gum
+fi
+
+# Stop when "aws" is not installed
+if ! command -v aws &> /dev/null; then
+    die "AWS CLI is not installed. Please install it and try again."
+fi
+
+# Stop when "gum" is not installed
+if ! command -v gum &> /dev/null; then
+    die "Gum CLI is not installed. Please install it and try again. Visit this page -> https://github.com/charmbracelet/gum"
+fi
+
+S3_BUCKET=$(gum spin --show-output --title "Fetching S3 buckets" -- aws s3 ls | awk '{print $3}' | gum filter --reverse --placeholder "Select...")
+
+TARGET=$(gum choose --header "Select a enviroment" "Elastic Container Service" "EC2")
+if [ "$TARGET" = "Elastic Container Service" ]; then
+    TARGET="ecs"
+else
+    TARGET="ec2"
+fi
+
+S3_BUCKET_PATH=s3://$S3_BUCKET/$TARGET/
+
+# search env file
+ENV_FILE=$(aws s3 ls "$S3_BUCKET_PATH" | grep env | awk '{print $4}' | gum filter --reverse --placeholder "Select...")
+
+# confirm
+if (gum confirm "Are you sure you want to use $ENV_FILE?"); then
+    echo "You selected $ENV_FILE"
+else
+    die "Aborted."
+fi
+
+ENV_FILE_NAME=$(gum input --prompt.foreground "#04B575" --prompt "Enter the name of the env file: " --value ".env" --placeholder ".env")
+gum spin -s meter --title "Copying env file..." -- aws s3 cp "$S3_BUCKET_PATH$ENV_FILE" "$ENV_FILE_NAME"
+echo "Done."
+
