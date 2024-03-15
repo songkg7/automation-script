@@ -60,7 +60,7 @@ if ! command -v gum &> /dev/null; then
     die "Gum CLI is not installed. Please install it and try again. Visit this page -> https://github.com/charmbracelet/gum"
 fi
 
-S3_BUCKET=$(gum spin --show-output --title "Fetching S3 buckets" -- aws s3 ls | awk '{print $3}' | gum filter --reverse --placeholder "Select...")
+S3_BUCKET=$(aws s3 ls | awk '{print $3}' | gum filter --reverse --placeholder "Select...")
 
 TARGET=$(gum choose --header "Select a environment" "Elastic Container Service" "EC2")
 if [ "$TARGET" = "Elastic Container Service" ]; then
