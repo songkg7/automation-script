@@ -50,14 +50,23 @@ esac
 
 # TODO: force dependencies to be installed based on OS options
 
-# Stop when "aws" is not installed
-if ! command -v aws &> /dev/null; then
-    die "AWS CLI is not installed. Please install it and try again."
-fi
-
 # Stop when "gum" is not installed
 if ! command -v gum &> /dev/null; then
     die "Gum CLI is not installed. Please install it and try again. Visit this page -> https://github.com/charmbracelet/gum"
+fi
+
+# Stop when "aws" is not installed
+if ! command -v aws &> /dev/null; then
+    if (gum confirm "AWS CLI is not installed. Do you want to install it using brew?"); then
+        brew install awscli
+    else
+        die "AWS CLI is not installed. Please install it and try again."
+    fi
+fi
+
+# check aws configure
+if ! aws configure get aws_access_key_id; then
+    die "AWS CLI is not configured. Please run 'aws configure' and try again."
 fi
 
 S3_BUCKET=$(aws s3 ls | awk '{print $3}' | gum filter --reverse --placeholder "Select...")
